@@ -166,6 +166,31 @@
   .fatura-paga { opacity: 0.6; }
   .fatura-vazia { padding: 16px; text-align: center; font-size: 0.8rem; color: #475569; }
 
+  /* Histórico */
+  .tab-historico.active { background:#1e293b; border-color:#1e3a5f; color:#818cf8; }
+  .hist-mes-card { background:#0f172a; border:1px solid #1e3a5f; border-radius:10px; margin-bottom:12px; overflow:hidden; }
+  .hist-mes-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; user-select:none; }
+  .hist-mes-header:hover { background:#131f30; }
+  .hist-mes-title { font-size:0.92rem; font-weight:700; color:#818cf8; }
+  .hist-mes-pills { display:flex; gap:8px; flex-wrap:wrap; }
+  .hist-pill { font-size:0.72rem; font-weight:600; padding:2px 9px; border-radius:99px; }
+  .hist-pill-g { background:#052e16; color:#4ade80; border:1px solid #166534; }
+  .hist-pill-d { background:#2d0e0e; color:#f87171; border:1px solid #7f1d1d; }
+  .hist-pill-s { border:1px solid #334155; color:#94a3b8; }
+  .hist-mes-body { display:none; border-top:1px solid #1e3a5f; padding:14px 16px; }
+  .hist-mes-body.open { display:block; }
+  .hist-mes-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:14px; }
+  .hist-mini-card { background:#1e293b; border-radius:6px; padding:10px 12px; border-left:3px solid; }
+  .hist-mini-label { font-size:0.68rem; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; }
+  .hist-mini-val { font-size:1rem; font-weight:700; margin-top:3px; }
+  .hist-acoes { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .btn-hist-del { background:transparent; border:1px solid #ef4444; color:#ef4444; border-radius:5px; padding:4px 10px; font-size:0.75rem; cursor:pointer; }
+  .btn-hist-del:hover { background:#ef4444; color:#fff; }
+  .hist-totais { background:#0a1628; border:1px solid #1e3a5f; border-radius:10px; padding:18px; margin-bottom:20px; }
+  .hist-totais h3 { font-size:0.88rem; font-weight:700; color:#818cf8; margin-bottom:14px; }
+  .hist-totais-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+  .hist-empty { text-align:center; padding:40px 20px; color:#475569; font-size:0.85rem; }
+
   /* Select com busca */
   .csel-wrap { position:relative; display:block; }
   .csel-display { background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:6px 28px 6px 10px; border-radius:6px; font-size:0.82rem; width:100%; cursor:pointer; user-select:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; box-sizing:border-box; }
@@ -199,6 +224,7 @@
 </header>
 
 <div class="tabs">
+  <div class="tab tab-historico" onclick="showTab('historico')">📅 Histórico</div>
   <div class="tab tab-resumo active" onclick="showTab('resumo')">📊 Resumo</div>
   <div class="tab tab-ganhos" onclick="showTab('ganhos')">💰 Ganhos</div>
   <div class="tab tab-despesas" onclick="showTab('despesas')">🏠 Despesas</div>
@@ -206,6 +232,16 @@
   <div class="tab tab-investimentos" onclick="showTab('investimentos')">📈 Investimentos</div>
   <div class="tab tab-educacao" onclick="showTab('educacao')">📚 Educação</div>
   <div class="tab tab-vestuario" onclick="showTab('vestuario')">👗 Vestuário</div>
+</div>
+
+<!-- HISTÓRICO -->
+<div id="tab-historico" class="content">
+  <div class="toolbar">
+    <div class="section-title">📅 Histórico Mensal</div>
+    <button class="btn btn-add" onclick="salvarMesAtual()" style="background:#312e81;border:1px solid #6366f1;color:#a5b4fc;">💾 Salvar mês atual</button>
+  </div>
+  <div id="hist-totais-wrap"></div>
+  <div id="hist-lista"></div>
 </div>
 
 <!-- RESUMO -->
@@ -483,6 +519,7 @@ function showTab(id) {
   document.querySelector('.tab-'+id).classList.add('active');
   document.getElementById('tab-'+id).classList.add('active');
   if(id==='resumo') updateResumo();
+  if(id==='historico') renderHistorico();
 }
 
 // ── Row add/remove ────────────────────────────────────────
@@ -587,11 +624,11 @@ function calcTotals(s){
   if(s==='despesas'){
     const tDesp=sumF(D.despesas,'valor');
     // Inclui faturas de cartão no total
-    const tFat=(D.faturas||[]).reduce((a,f)=>a+f.total,0);
+    const tFat=(D.faturas||[]).reduce((a,f)=>a+fatTotal(f),0);
     const t = tDesp + tFat;
     const fix=D.despesas.filter(r=>r.tipo==='Fixo').reduce((a,r)=>a+(+r.valor||0),0);
     const pagasDesp=D.despesas.filter(r=>r.pago).reduce((a,r)=>a+(+r.valor||0),0);
-    const pagas=pagasDesp + (D.faturas||[]).filter(f=>f.pago).reduce((a,f)=>a+f.total,0);
+    const pagas=pagasDesp + (D.faturas||[]).filter(f=>f.pago).reduce((a,f)=>a+fatTotal(f),0);
     const apagar=t-pagas;
     setEl('total-despesas',fmt(t)); setEl('total-fixas',fmt(fix)); setEl('total-variaveis',fmt(t-fix));
     setEl('total-pagas',fmt(pagas)); setEl('total-apagar',fmt(apagar));
@@ -627,7 +664,7 @@ function calcTotals(s){
 function updateResumo(){
   const g=sumF(D.ganhos,'valor');
   const dDesp=sumF(D.despesas,'valor');
-  const dFat=(D.faturas||[]).reduce((a,f)=>a+f.total,0);
+  const dFat=(D.faturas||[]).reduce((a,f)=>a+fatTotal(f),0);
   const d=dDesp+dFat;  // despesas + faturas de cartão
   const inv=sumF(D.investimentos,'aporte');          // aportes mensais (saída de caixa)
   const invSaldo=sumF(D.investimentos,'saldo');       // patrimônio acumulado (posição atual)
@@ -753,7 +790,7 @@ function updateResumo(){
 
 function calcularReserva(){
   const fixDesp=sumF(D.despesas,'valor');
-  const fixFat=(D.faturas||[]).reduce((a,f)=>a+f.total,0);
+  const fixFat=(D.faturas||[]).reduce((a,f)=>a+fatTotal(f),0);
   const fix=fixDesp+fixFat;
   const tb=document.getElementById('reserva-table');
   if(tb) tb.innerHTML=[6,12,18].map(m=>`<tr><td>${m} meses</td><td style="text-align:right;font-weight:700;color:#fbbf24">${fmt(fix*m)}</td></tr>`).join('');
@@ -762,7 +799,7 @@ function calcularReserva(){
   const invSaldo=sumF(D.investimentos,'saldo');
   const ganhos=sumF(D.ganhos,'valor');
   const pagasDesp=D.despesas.filter(r=>r.pago).reduce((a,r)=>a+(+r.valor||0),0);
-  const pagasFat=(D.faturas||[]).filter(f=>f.pago).reduce((a,f)=>a+f.total,0);
+  const pagasFat=(D.faturas||[]).filter(f=>f.pago).reduce((a,f)=>a+fatTotal(f),0);
   const pagas=pagasDesp+pagasFat;
   const caixa=Math.max(0, ganhos-pagas);
   const total=invSaldo+caixa;
@@ -796,6 +833,7 @@ function save(){
 function load(){
   try{ const d=localStorage.getItem('finCtrl_v2'); if(d) D=JSON.parse(d); }catch(e){}
   if(!D.faturas) D.faturas=[];
+  if(!D.historico) D.historico=[];
   // Carrega categorias customizadas
   try{
     const c=localStorage.getItem('finCtrl_cats');
@@ -862,12 +900,54 @@ function renderCatsModalBody(){
   }
   el.innerHTML = filtered.map(({c:cat,i})=>{
     const isDefault = defaults.includes(cat);
-    return `<div class="cat-item">
+    return `<div class="cat-item" id="cat-item-${i}">
       <span class="cat-item-name">${e(cat)}</span>
       ${isDefault?'<span class="cat-item-default">padrão</span>':''}
-      <button class="btn-cat-del" onclick="deleteCat(${i})" title="Excluir categoria">✕</button>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button class="btn-cat-del" style="color:#60a5fa;border-color:#60a5fa;" onclick="editCatInline(${i})" title="Editar">✎</button>
+        <button class="btn-cat-del" onclick="deleteCat(${i})" title="Excluir">✕</button>
+      </div>
     </div>`;
   }).join('');
+}
+
+function editCatInline(idx) {
+  const item = document.getElementById('cat-item-'+idx);
+  if(!item) return;
+  const cat = CATS[_catsModalSection][idx];
+  item.innerHTML = `
+    <input type="text" id="cat-edit-input-${idx}" value="${e(cat)}"
+      style="flex:1;background:#0f172a;border:1px solid #3b82f6;color:#e2e8f0;padding:5px 10px;border-radius:6px;font-size:0.82rem;outline:none;"
+      onkeydown="if(event.key==='Enter') saveCatEdit(${idx}); if(event.key==='Escape') renderCatsModalBody();">
+    <div style="display:flex;gap:4px;flex-shrink:0;">
+      <button class="btn-cat-add" style="padding:4px 10px;font-size:0.75rem;" onclick="saveCatEdit(${idx})">✓</button>
+      <button class="btn-cat-reset" style="padding:4px 8px;" onclick="renderCatsModalBody()">✕</button>
+    </div>`;
+  setTimeout(()=>{ const inp=document.getElementById('cat-edit-input-'+idx); if(inp){inp.focus();inp.select();} }, 40);
+}
+
+function saveCatEdit(idx) {
+  const inp = document.getElementById('cat-edit-input-'+idx);
+  if(!inp) return;
+  const novo = inp.value.trim();
+  if(!novo) return;
+  const antigo = CATS[_catsModalSection][idx];
+  if(novo === antigo){ renderCatsModalBody(); return; }
+  if(CATS[_catsModalSection].includes(novo)){
+    inp.style.borderColor='#ef4444';
+    setTimeout(()=>inp.style.borderColor='#3b82f6', 1500);
+    return;
+  }
+  // Atualiza lançamentos existentes que usam o nome antigo
+  const sec = _catsModalSection;
+  (D[sec]||[]).forEach(r=>{
+    if(r.cat === antigo) r.cat = novo;
+    if(r.tipo === antigo) r.tipo = novo;
+  });
+  CATS[sec][idx] = novo;
+  save();
+  renderCatsModalBody();
+  renderTable(sec);
 }
 
 function addCatFromModal(){
@@ -1180,10 +1260,10 @@ function removeCCRow(i) {
 function updCC(i,f,v) {
   D.cartao[i][f]=v;
   save(); renderCC(); calcTotalsCC();
+  if(D.cartao[i].importado) { renderFaturas(); calcTotals('despesas'); updateResumo(); }
 }
 
 function importarUm(i) {
-  // Importação individual: cria fatura com item único
   const r=D.cartao[i];
   if(r.importado) return;
   const faturaId = 'fat_' + Date.now();
@@ -1192,9 +1272,8 @@ function importarUm(i) {
   D.faturas.push({
     id: faturaId,
     label: '💳 ' + label,
-    itens: [{data:r.data, desc:r.desc, cat:r.cat, valor:r.valor}],
+    srcIds: [r.id],
     pago: false,
-    total: r.valor,
     criadoEm: new Date().toLocaleDateString('pt-BR')
   });
   D.cartao[i].importado=true;
@@ -1204,20 +1283,17 @@ function importarUm(i) {
 function importarTodos() {
   const pendentes=(D.cartao||[]).filter(r=>!r.importado && r.valor>0);
   if(pendentes.length===0) return;
-  // Agrupa tudo numa única fatura datada de hoje
   const hoje = new Date().toLocaleDateString('pt-BR');
-  const total = pendentes.reduce((a,r)=>a+r.valor,0);
   const faturaId = 'fat_' + Date.now();
   if(!D.faturas) D.faturas=[];
   D.faturas.push({
     id: faturaId,
     label: `💳 Fatura Cartão — ${hoje}`,
-    itens: pendentes.map(r=>({data:r.data, desc:r.desc, cat:r.cat, valor:r.valor})),
+    srcIds: pendentes.map(r=>r.id),
     pago: false,
-    total,
     criadoEm: hoje
   });
-  (D.cartao||[]).forEach((r,i)=>{ if(!r.importado && r.valor>0) D.cartao[i].importado=true; });
+  (D.cartao||[]).forEach((r,idx)=>{ if(!r.importado && r.valor>0) D.cartao[idx].importado=true; });
   save(); renderCC(); calcTotalsCC(); renderFaturas(); calcTotals('despesas'); updateResumo();
 }
 
@@ -1237,8 +1313,29 @@ function toggleFaturaBody(fatId) {
 
 function removerFatura(fatId) {
   if(!D.faturas) return;
+  // Desmarca importado nos itens do cartão que pertenciam a esta fatura
+  const fat = D.faturas.find(f=>f.id===fatId);
+  if(fat) {
+    const srcSet = new Set(fat.srcIds||[]);
+    (D.cartao||[]).forEach(r=>{ if(srcSet.has(r.id)) r.importado=false; });
+  }
   D.faturas = D.faturas.filter(f=>f.id!==fatId);
-  save(); renderFaturas(); calcTotals('despesas'); updateResumo();
+  save(); renderCC(); calcTotalsCC(); renderFaturas(); calcTotals('despesas'); updateResumo();
+}
+
+// Retorna os itens ao vivo do cartão para uma fatura, suportando modelo novo (srcIds) e legado (itens[])
+function fatItens(fat) {
+  if(fat.srcIds) {
+    const idx = {};
+    (D.cartao||[]).forEach(r=>{ idx[r.id]=r; });
+    return (fat.srcIds).map(id=>idx[id]).filter(Boolean);
+  }
+  // legado: fatura antiga tinha fat.itens[] com cópias — retorna como está
+  return fat.itens||[];
+}
+
+function fatTotal(fat) {
+  return fatItens(fat).reduce((a,r)=>a+(+r.valor||0),0);
 }
 
 function renderFaturas() {
@@ -1247,9 +1344,11 @@ function renderFaturas() {
   const faturas = D.faturas||[];
   if(faturas.length===0){ el.innerHTML=''; return; }
   el.innerHTML = faturas.map(fat=>{
+    const itens = fatItens(fat);
+    const total = fatTotal(fat);
     const pagoClass = fat.pago ? 'fatura-paga' : '';
-    const itensHTML = fat.itens && fat.itens.length
-      ? fat.itens.map(it=>`
+    const itensHTML = itens.length
+      ? itens.map(it=>`
           <div class="fatura-item ${pagoClass}">
             <span class="fatura-item-data">${it.data||'—'}</span>
             <span class="fatura-item-desc">${e(it.desc)}</span>
@@ -1261,10 +1360,10 @@ function renderFaturas() {
       <div class="fatura-header" onclick="toggleFaturaBody('${fat.id}')">
         <div class="fatura-header-left">
           <span class="fatura-titulo">${e(fat.label)}</span>
-          <span class="fatura-meta">${fat.itens?fat.itens.length:0} ite(ns) · ${fat.criadoEm||''}</span>
+          <span class="fatura-meta">${itens.length} iten(s) · ${fat.criadoEm||''}</span>
         </div>
         <div class="fatura-header-right" onclick="event.stopPropagation()">
-          <span class="fatura-valor" style="${fat.pago?'color:#4ade80':'color:#f87171'}">${fmt(fat.total)}</span>
+          <span class="fatura-valor" style="${fat.pago?'color:#4ade80':'color:#f87171'}">${fmt(total)}</span>
           <label class="fatura-pago-label" title="Marcar fatura como paga">
             <input type="checkbox" ${fat.pago?'checked':''} onchange="toggleFaturaPago('${fat.id}')">
             ${fat.pago?'<span style="color:#4ade80">Paga</span>':'<span>Marcar paga</span>'}
@@ -1306,6 +1405,158 @@ function calcTotalsCC() {
   setEl('cc-importados',fmt(imp));
   setEl('cc-pendentes',fmt(total-imp));
   setEl('cc-qtd',rows.length.toString());
+}
+
+// ── Histórico Mensal ──────────────────────────────────────
+function snapshotAtual() {
+  const ganhos  = sumF(D.ganhos,'valor');
+  const despesas= sumF(D.despesas,'valor') + (D.faturas||[]).reduce((a,f)=>a+fatTotal(f),0);
+  const aportes = sumF(D.investimentos,'aporte');
+  const patrimonio = sumF(D.investimentos,'saldo');
+  const educacao= sumF(D.educacao,'valor');
+  const vestuario= sumF(D.vestuario,'valor');
+  const saidas  = despesas + aportes + educacao + vestuario;
+  const saldo   = ganhos - saidas;
+  return { ganhos, despesas, aportes, patrimonio, educacao, vestuario, saidas, saldo };
+}
+
+function salvarMesAtual() {
+  const mes = prompt('Nome do mês para salvar (ex: Jun/2026):', mesAtual);
+  if(!mes || !mes.trim()) return;
+  if(!D.historico) D.historico=[];
+  if(D.historico.find(h=>h.mes===mes.trim())) {
+    if(!confirm(`Já existe um registro para "${mes.trim()}". Substituir?`)) return;
+    D.historico = D.historico.filter(h=>h.mes!==mes.trim());
+  }
+  D.historico.push({ mes: mes.trim(), data: new Date().toLocaleDateString('pt-BR'), ...snapshotAtual() });
+  D.historico.sort((a,b)=>{ // ordena por ano/mês
+    const parse = s=>{ const [m,y]=(s||'').split('/'); const mi=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].indexOf(m); return (+(y||0))*12+(mi>=0?mi:0); };
+    return parse(a.mes)-parse(b.mes);
+  });
+  save(); renderHistorico();
+  alert(`✅ Mês "${mes.trim()}" salvo no histórico!`);
+}
+
+function toggleHistMes(id) {
+  const b = document.getElementById('hist-body-'+id);
+  const c = document.getElementById('hist-chev-'+id);
+  if(!b) return;
+  const open = b.classList.toggle('open');
+  if(c) c.textContent = open?'▲':'▼';
+}
+
+function deletarMes(idx) {
+  const mes = (D.historico||[])[idx]?.mes;
+  if(!confirm(`Excluir o registro de "${mes}"?`)) return;
+  D.historico.splice(idx,1);
+  save(); renderHistorico();
+}
+
+function renderHistorico() {
+  const hist = D.historico||[];
+  const atual = snapshotAtual();
+
+  // ── Totais acumulados ──
+  const tw = document.getElementById('hist-totais-wrap');
+  if(tw) {
+    if(hist.length > 0) {
+      const tot = hist.reduce((a,h)=>({
+        ganhos:a.ganhos+h.ganhos, despesas:a.despesas+h.despesas,
+        aportes:a.aportes+h.aportes, saldo:a.saldo+h.saldo,
+        educacao:a.educacao+h.educacao, vestuario:a.vestuario+h.vestuario
+      }), {ganhos:0,despesas:0,aportes:0,saldo:0,educacao:0,vestuario:0});
+      const cards = [
+        {l:'Ganhos Acumulados',v:tot.ganhos,c:'#4ade80',b:'#166534'},
+        {l:'Despesas Acumuladas',v:tot.despesas,c:'#f87171',b:'#7f1d1d'},
+        {l:'Aportes Acumulados',v:tot.aportes,c:'#fbbf24',b:'#78350f'},
+        {l:'Saldo Acumulado',v:tot.saldo,c:tot.saldo>=0?'#4ade80':'#f87171',b:tot.saldo>=0?'#166534':'#7f1d1d'},
+        {l:'Educação Acumulada',v:tot.educacao,c:'#a78bfa',b:'#4c1d95'},
+        {l:'Vestuário Acumulado',v:tot.vestuario,c:'#fb7185',b:'#881337'},
+      ];
+      tw.innerHTML = `<div class="hist-totais">
+        <h3>📊 Totais Acumulados — ${hist.length} mês(es) registrado(s)</h3>
+        <div class="hist-totais-grid">${cards.map(c=>`
+          <div class="hist-mini-card" style="border-color:${c.b}">
+            <div class="hist-mini-label">${c.l}</div>
+            <div class="hist-mini-val" style="color:${c.c}">${fmt(c.v)}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    } else {
+      tw.innerHTML='';
+    }
+  }
+
+  // ── Mês atual (ao vivo) ──
+  const saldoAtualColor = atual.saldo>=0?'#4ade80':'#f87171';
+  const mesAtualCard = `<div class="hist-mes-card" style="border-color:#1e40af">
+    <div class="hist-mes-header" onclick="toggleHistMes('atual')">
+      <div>
+        <div class="hist-mes-title" style="color:#60a5fa">📌 Mês Atual — ${mesAtual} <span style="font-size:0.7rem;color:#475569;font-weight:400">(ao vivo)</span></div>
+      </div>
+      <div class="hist-mes-pills">
+        <span class="hist-pill hist-pill-g">↑ ${fmt(atual.ganhos)}</span>
+        <span class="hist-pill hist-pill-d">↓ ${fmt(atual.saidas)}</span>
+        <span class="hist-pill hist-pill-s" style="color:${saldoAtualColor};border-color:${saldoAtualColor}">= ${fmt(atual.saldo)}</span>
+      </div>
+      <span id="hist-chev-atual" style="color:#475569;font-size:0.7rem;margin-left:8px;">▼</span>
+    </div>
+    <div class="hist-mes-body" id="hist-body-atual">
+      <div class="hist-mes-grid">
+        ${histMiniCards(atual)}
+      </div>
+    </div>
+  </div>`;
+
+  // ── Meses salvos ──
+  const lista = document.getElementById('hist-lista');
+  if(!lista) return;
+  if(hist.length===0){
+    lista.innerHTML = mesAtualCard + `<div class="hist-empty">Nenhum mês salvo ainda.<br>Clique em <strong style="color:#818cf8">💾 Salvar mês atual</strong> ao fechar o mês.</div>`;
+    return;
+  }
+  const mesesHTML = [...hist].reverse().map((h,ri)=>{
+    const i = hist.length-1-ri;
+    const sc = h.saldo>=0?'#4ade80':'#f87171';
+    return `<div class="hist-mes-card">
+      <div class="hist-mes-header" onclick="toggleHistMes(${i})">
+        <div>
+          <div class="hist-mes-title">${h.mes}</div>
+          <div style="font-size:0.68rem;color:#475569;margin-top:1px;">Salvo em ${h.data}</div>
+        </div>
+        <div class="hist-mes-pills">
+          <span class="hist-pill hist-pill-g">↑ ${fmt(h.ganhos)}</span>
+          <span class="hist-pill hist-pill-d">↓ ${fmt(h.saidas||h.despesas)}</span>
+          <span class="hist-pill hist-pill-s" style="color:${sc};border-color:${sc}">= ${fmt(h.saldo)}</span>
+        </div>
+        <span id="hist-chev-${i}" style="color:#475569;font-size:0.7rem;margin-left:8px;">▼</span>
+      </div>
+      <div class="hist-mes-body" id="hist-body-${i}">
+        <div class="hist-mes-grid">${histMiniCards(h)}</div>
+        <div class="hist-acoes">
+          <button class="btn-hist-del" onclick="deletarMes(${i})">🗑 Excluir este mês</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  lista.innerHTML = mesAtualCard + mesesHTML;
+}
+
+function histMiniCards(h) {
+  const cards = [
+    {l:'Ganhos',v:h.ganhos,c:'#4ade80',b:'#166534'},
+    {l:'Despesas',v:h.despesas,c:'#f87171',b:'#7f1d1d'},
+    {l:'Aportes',v:h.aportes,c:'#fbbf24',b:'#78350f'},
+    {l:'Patrimônio',v:h.patrimonio||0,c:'#fbbf24',b:'#78350f'},
+    {l:'Educação',v:h.educacao,c:'#a78bfa',b:'#4c1d95'},
+    {l:'Vestuário',v:h.vestuario,c:'#fb7185',b:'#881337'},
+    {l:'Saldo',v:h.saldo,c:h.saldo>=0?'#4ade80':'#f87171',b:h.saldo>=0?'#166534':'#7f1d1d'},
+  ];
+  return cards.map(c=>`<div class="hist-mini-card" style="border-color:${c.b}">
+    <div class="hist-mini-label">${c.l}</div>
+    <div class="hist-mini-val" style="color:${c.c}">${fmt(c.v)}</div>
+  </div>`).join('');
 }
 
 // ── Select com busca ──────────────────────────────────────
@@ -1381,6 +1632,7 @@ function cselSelect(id, val){
 renderCC(); calcTotalsCC();
 renderFaturas();
 updateResumo();
+renderHistorico();
 </script>
 </body>
 </html>
